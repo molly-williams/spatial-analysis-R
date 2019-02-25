@@ -1,0 +1,152 @@
+---
+title: "MW Spatial Data Tutorial"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### Load data and packages 
+```{r}
+library(sf)
+library(rgdal)
+library(raster)
+library(tidyverse)
+
+# Most sf functions use st_ as a prefix (spatial temporal)
+
+--
+
+# Load and look at data:
+
+ak_shp_sf <- read_sf("shapefiles/ak_regions.shp")
+
+plot(ak_shp_sf[1]) # gives you three because its plotting each column - not what you want 
+ # also shows the aleutian islands on the wrong side of the map(because of projection)
+ak_shp_sf # Console output tells you the bounding box (extent), epsg
+
+```
+
+
+### Transform the shape file:
+
+```{r}
+
+st_crs(ak_shp_sf) # check projection
+
+# convert to an equal area projection: 
+ak_shp_eq <- ak_shp_sf %>% 
+  st_transform(crs = 3338) # can do a proj 4 string or an epsg code here 
+
+# Re-check projection:
+st_crs(ak_shp_eq)
+
+plot(ak_shp_sf_eq[1]) # Now all the islands are together!
+
+
+nrow(ak_shp_eq)
+```
+
+### sf and the tidyverse
+
+```{r}
+
+se <- ak_shp_eq %>% 
+  select(region) %>%  # geometry is sticky; stays with the data unless you tell R otherwise
+  filter(region == "Southeast")
+
+
+plot(se[1])
+
+
+# Bring in population information:
+
+pop <- read_csv("shapefiles/alaska_population.csv")
+head(pop) # has lat/long info 
+
+# To plot this on a mac, we need to turn it into a simple feature 
+
+pop_sf <- st_as_sf(pop,
+                   coords = c('lng', 'lat'),
+                   crs = 4326, # have to read in the data in the coordinate system it's already in, then you can transform it (this info is usually in metadata)
+                   remove = F)
+
+plot(pop_sf[1])
+
+
+# Use st_transform to re-project population layer
+
+pop_sf_eq <- pop_sf %>% 
+  st_transform(crs = 3338)
+
+
+# Now that the CRSs match, you can join population data to the regional data: 
+
+pop_joined_sf <- st_join(pop_sf_eq, ak_shp_eq, join = st_within) # st_within
+
+head(pop_joined_sf)
+plot(pop_joined_sf)
+
+
+
+```
+
+### Use spatial data to create a data frame
+
+```{r}
+
+ # How many people live in each region?
+
+pop_by_region <- pop_joined_sf %>% 
+  as.data.frame() %>% 
+  select(region_id, population) %>% 
+  group_by(region_id) %>% 
+  summarise(pop = sum(population))
+
+
+# Add population information back to original shape file:
+ak_pop_sf <- ak_shp_eq %>% 
+  left_join(pop_by_region)
+
+head(ak_pop_sf)
+
+plot(ak_pop_sf["pop"])
+
+
+```
+
+
+### Group by and summarize
+
+```{r}
+
+
+# Calculate population by AK management area and map it:
+
+pop_mgmt_area <- ak_pop_sf %>% 
+  group_by(mgmt_area) %>% 
+  summarise(pop = sum(pop), do_union = F) # do_union tells it whether or not to dissolve region boundaries
+
+plot(pop_mgmt_area["pop"])
+
+# Save the spatial object:
+
+write_sf(ak_pop_sf, "shapefiles/ak_regions_population.shp")
+
+```
+
+
+# Visualize with ggplot 
+
+
+
+
+
+
+
+
+
+
+
+
