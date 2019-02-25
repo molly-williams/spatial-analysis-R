@@ -7,11 +7,11 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
+
+## Working with vector data 
 ### Load data and packages 
 ```{r}
 library(sf)
-library(rgdal)
-library(raster)
 library(tidyverse)
 
 # Most sf functions use st_ as a prefix (spatial temporal)
@@ -137,10 +137,48 @@ write_sf(ak_pop_sf, "shapefiles/ak_regions_population.shp")
 ```
 
 
-# Visualize with ggplot 
+## Working with raster data (GEOtiffs)
+### Load data and packages
+```{r}
+
+library(rgdal)
+library(raster)
+library(sf) # using a shapefile to work with raster data; raster package is starting to accept sf objects
+
+wc_rgns <- read_sf("shapefiles/wc_regions_clean.shp")
+plot(wc_rgns)
+
+```
+
+### Raster data prep
+```{r}
+
+# Sea surface temp 
+
+r <- raster("rasters/average_annual_sst_2008.tif") # this data is in K, we'll change it to C later
+r
+plot(r)
+hist(r) # distribution of data in the raster
 
 
+# Instead of reading in all the rasters at once, create a list of all the sst files:
+sst_files <- list.files("rasters", pattern = "average_annual_sst", full.names = T) # finds everything that has sst in the file name; keeps full file names 
 
+
+# Stack the rasters:
+sst_stack <- stack(sst_files)
+sst_stack
+plot(sst_stack)
+
+# Calculate average SST: 
+sst_avg <- mean(sst_stack)-273.15 # conversion to C
+plot(sst_avg)
+
+# Another way to do it:
+sst_avg <- calc(sst_stack, fun = function(x){mean(x) - 273.15}, progress = "text") # progress = text in raster functions helps you understand where your analysis is at (especially for long analyses)
+plot(sst_avg)
+
+```
 
 
 
