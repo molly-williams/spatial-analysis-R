@@ -150,10 +150,8 @@ plot(wc_rgns)
 
 ```
 
-### Raster data prep
+### Raster data prep: Sea surface temperature 
 ```{r}
-
-# Sea surface temp 
 
 r <- raster("rasters/average_annual_sst_2008.tif") # this data is in K, we'll change it to C later
 r
@@ -178,7 +176,98 @@ plot(sst_avg)
 sst_avg <- calc(sst_stack, fun = function(x){mean(x) - 273.15}, progress = "text") # progress = text in raster functions helps you understand where your analysis is at (especially for long analyses)
 plot(sst_avg)
 
+
 ```
+
+
+### Raster data prep: Net primary productivity
+```{r}
+
+npp <- raster("rasters/annual_npp.tif")
+
+plot(npp) # This is in Mollweide, need to convert back to what other raster layer is (lat/long)
+# Getting more of the world than we need here, goin to crop and resample to make cells the same size
+
+# 1. Re-project
+
+npp_proj <- projectRaster(npp, crs = "+proj=longlat")  # preserve as much data from the original as possible 
+npp_proj
+
+
+# 2. Crop
+npp_crop <- crop(npp_proj, sst_avg) # cropping to match sst_avg raster 
+plot(npp_crop)
+
+# 3. Resample
+npp_res <- resample(npp_crop, sst_avg, method = "ngb") #nearest neighbor method!
+plot(npp_res) # resolution is the same as sst_avg, but with original data retained
+
+
+# Can also do this entire process using pipes:
+ npp_res <- projectRaster(npp, crs = ("+proj=longlat")) %>% 
+   crop(sst_avg) %>% 
+   resample(sst_avg, method = "ngb")
+   
+
+
+```
+
+### Analyze potential areas are for aquaculture
+
+```{r}
+
+stack(npp_res, sst_avg)
+
+
+# Reclassify to ones (where aquaculture is possble) and zeroes (not possible for this species)
+
+sst_pref <- reclassify(sst_avg, c(-Inf, 12, NA, # between neg infinitiy and 12, make it NA 
+                                  12, 18, 1, 
+                                  18, Inf, NA))
+
+
+# Can then plot the feasible areas for temperature:
+
+plot(sst_pref)
+
+
+# Now do the same thing for npp:
+
+npp_pref <- reclassify(npp_res, c(-Inf, 2.6, NA, # between neg infinitiy and 12, make it NA 
+                                  2.6, 3, 1, 
+                                  3, Inf, NA))
+plot(npp_pref)
+
+
+# Combine SST and NPP:
+
+cells_pref <- npp_pref + sst_pref
+plot(cells_pref) # looks okkay
+
+# Better - overlay x and y:
+
+cells_pref <- overlay(sst_pref, npp_pref, fun = function(x,y){x*y}, progress = "text")
+
+plot(cells_pref) 
+plot(wc_rgns, add = T, color=NA)  # run these two lines quickly! 
+
+
+
+# Remove international waters
+final_cells <- mask(cells_pref, wc_rgns)
+plot(final_cells)
+
+
+# More things you can do (in guiding doc): zonal statistics, 
+```
+
+```{r}
+
+```
+
+
+
+
 
 
 
